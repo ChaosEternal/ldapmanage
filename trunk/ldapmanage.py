@@ -15,10 +15,10 @@ error=debug_message(1)
 
 class ldapmanage(object):
     def __init__(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
+        self.cwd="(no server)"
+        self.cmds=["cd","ls","entry","add","modify","delete","base64","showdsa","init","exit","w","whoami","help"]
         if uri!="":
             self._init(uri,bindmethod,binduser,cred,authzid)
-        self.cmds=["cd","ls","entry","add","modify","delete","base64","showdsa","init"]
-        self.cwd="(no server)"
 
     def _init(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
         self.lc=ldap.initialize(uri)
@@ -51,7 +51,10 @@ class ldapmanage(object):
     def standby(self):
         while True:
             self.prompt="'%s'=> "%self.cwd
-            s=raw_input(self.prompt)
+            try:
+                s=raw_input(self.prompt)
+            except EOFError,e:
+                self.exit(["exit","eof"])
             cmd=shlex.split(s)
             if len(cmd)==0:
                 continue
@@ -60,6 +63,10 @@ class ldapmanage(object):
             else:
                 error("no such command!")
     def cd(self,cmd):
+        """usage: cd [path]
+           path: null means goto root of the tree
+                 "/" at the end of 'path' mean the path is absolute 
+        """
         if len(cmd)>1:
             path=cmd[1]
             if path[-1]=="/":
@@ -76,6 +83,7 @@ class ldapmanage(object):
         else:
             self.cwd=self.namingContexts[0]
     def entry(self,cmd):
+        """usgae: entry [rdn]"""
         if len(cmd)>1:
             if self.cwd=="":
                 entrydn=cmd[1]
@@ -86,11 +94,21 @@ class ldapmanage(object):
         res=self.lc.search_s(entrydn,ldap.SCOPE_BASE,"(objectClass=*)")
         print res
     def ls(self,cmd):
+        """usage: ls"""
         res=self.lc.search_s(self.cwd,ldap.SCOPE_ONELEVEL,"(objectClass=*)",["dn"])
         print res
     def showdsa(self,cmd):
         print self.dsa[0]
     def init(self,cmd):
+        """usage: init [OPTS]...[LDAPURL]
+            OPTS:
+                -x: simple bind
+                -y 'mech': sasl bind using mechanism 'mech'
+                -z 'authzid': proxied authentication to 'authzid'
+                -d 'binduser': bind using 'binduser', when simple bind, it is the dn
+                -w 'password': bind using 'password'
+            LDAPURL: default "ldapi:///"
+        """
         bindmech=""
         binduser=""
         bindpw=""
@@ -114,14 +132,7 @@ class ldapmanage(object):
             if o=="-w":
                 bindpw=a
             if o=="-h":
-                debug("""usage: init [OPTS]...[LDAPURL]""")
-                debug("""OPTS:""")
-                debug("""    -x: simple bind""")
-                debug("""    -y 'mech': sasl bind using mechanism 'mech'""")
-                debug("""    -z 'authzid': proxied authentication to 'authzid'""")
-                debug("""    -d 'binduser': bind using 'binduser', when simple bind, it is the dn""")
-                debug("""    -w 'password': bind using 'password'""")
-                debug("""LDAPURL: default "ldapi:///" """)
+                print self.init.__doc__
             return
         if len(args)==0:
             uri="ldapi:///"
@@ -130,7 +141,29 @@ class ldapmanage(object):
         if bindmech=="":
             bindmech="external"
         self._init(uri,bindmech,binduser,bindpw,authzid)
+    def exit(self,cmd):
+        """usage: exit"""
+        import sys
+        sys.exit(0)
+    def w(self,cmd):
+        """usage: w"""
+        self.whoami(cmd)
+    def whoami(self,cmd):
+        """usage: whoami"""
+        r=self.lc.whoami_s()
+        print r
+    def help(self,cmd):
+        """usage: help [command]"""
+        if len(cmd)>1:
+            if cmd[1] in self.cmds:
+                print self.__getattribute__(cmd[1]).__doc__
+            else:
+                print "No such command!"
+        else:
+            for i in self.cmds:
+                print i
+
         
 
-lm=ldapmanage()
+lm=ldapmanage("ldapi:///")
 lm.standby()
