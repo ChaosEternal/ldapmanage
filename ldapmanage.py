@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import ldap,shlex,cmd
+import ldap,shlex,cmd,getopt
 from ldap import sasl
 class debug_message:
     def __init__(self,level=1):
@@ -14,7 +14,13 @@ debug=debug_message(1)
 error=debug_message(1)
 
 class ldapmanage(object):
-    def __init__(self, uri, bindmethod="external", binduser="", cred="", authzid=""):
+    def __init__(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
+        if uri!="":
+            self._init(uri,bindmethod,binduser,cred,authzid)
+        self.cmds=["cd","ls","entry","add","modify","delete","base64","showdsa","init"]
+        self.cwd="(no server)"
+
+    def _init(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
         self.lc=ldap.initialize(uri)
         if bindmethod=="external":
             s=sasl.external()
@@ -32,9 +38,7 @@ class ldapmanage(object):
             debug( "'%s'"%i, False)
             debug("")
         self.cwd=self.namingContexts[0]
-        self.prompt="'%s'=>"%self.cwd
 
-        self.cmds=["cd","ls","entry","add","modify","delete","base64"]
     def checkexist(self,dn):
         try:
             res=self.lc.search_s(dn,ldap.SCOPE_BASE,"(objectClass=*)",["dn"])
@@ -84,6 +88,49 @@ class ldapmanage(object):
     def ls(self,cmd):
         res=self.lc.search_s(self.cwd,ldap.SCOPE_ONELEVEL,"(objectClass=*)",["dn"])
         print res
+    def showdsa(self,cmd):
+        print self.dsa[0]
+    def init(self,cmd):
+        bindmech=""
+        binduser=""
+        bindpw=""
+        authzid=""
+        optlist,args=getopt.getopt(cmd[1:],"xhy:z:d:w:")
+        for o, a in optlist:
+            if o=="-x":
+                if bindmech!="simple" and bindmech!="":
+                    error("conflict args: -x")
+                    return
+                bindmech="simple"
+            if o=="-y":
+                if bindmech=="simple":
+                    error("conflict args: -y")
+                    return
+                bindmech=a
+            if o=="-z":
+                authzid=a
+            if o=="-d":
+                binduser=a
+            if o=="-w":
+                bindpw=a
+            if o=="-h":
+                debug("""usage: init [OPTS]...[LDAPURL]""")
+                debug("""OPTS:""")
+                debug("""    -x: simple bind""")
+                debug("""    -y 'mech': sasl bind using mechanism 'mech'""")
+                debug("""    -z 'authzid': proxied authentication to 'authzid'""")
+                debug("""    -d 'binduser': bind using 'binduser', when simple bind, it is the dn""")
+                debug("""    -w 'password': bind using 'password'""")
+                debug("""LDAPURL: default "ldapi:///" """)
+            return
+        if len(args)==0:
+            uri="ldapi:///"
+        else:
+            uri=args[0]
+        if bindmech=="":
+            bindmech="external"
+        self._init(uri,bindmech,binduser,bindpw,authzid)
+        
 
-lm=ldapmanage("ldapi:///")
+lm=ldapmanage()
 lm.standby()
