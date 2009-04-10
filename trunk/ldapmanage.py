@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import ldap,shlex,cmd,getopt
+import ldap,shlex,cmd,getopt,traceback
 from ldap import sasl
 class debug_message:
     def __init__(self,level=1):
@@ -16,20 +16,17 @@ error=debug_message(1)
 class ldapmanage(object):
     def __init__(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
         self.cwd="(no server)"
-        self.cmds=["cd","ls","entry","add","modify","delete","base64","showdsa","init","exit","w","whoami","help"]
+        self.cmds=["cd","ls","entry","add","modify","delete","base64","getdsa","init","exit","w","whoami","help","bind"]
         if uri!="":
             self._init(uri,bindmethod,binduser,cred,authzid)
 
-    def _init(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
+    def _init(self, uri="ldapi:///", bindmethod="", binduser="", cred="", authzid=""):
         self.lc=ldap.initialize(uri)
-        if bindmethod=="external":
-            s=sasl.external()
-            self.lc.sasl_interactive_bind_s("",s)
-            self.me=self.lc.whoami_s()
-            if self.me=="":
-                self.me="(anonymous)"
-            debug( "bind to ldap server at '%s' as '%s'"%(self.lc.get_option(ldap.OPT_URI), self.me) )
+        if bindmethod!="":
+            self._bind(bindmethod, binduser, cred, authzid)
+        self._refresh_dsa()
 
+    def _refresh_dsa(self):
         self.dsa=self.lc.search_s("",ldap.SCOPE_BASE,"(objectClass=*)",["+","*"])
         self.namingContexts=self.dsa[0][1]["namingContexts"]
         debug( "We have namingcontexts at: \n   ", False)
@@ -38,6 +35,19 @@ class ldapmanage(object):
             debug( "'%s'"%i, False)
             debug("")
         self.cwd=self.namingContexts[0]
+
+    def _bind(self, bindmethod="external",binduser="", cred="", authzid=""):
+        if bindmethod=="external":
+            s=sasl.external()
+            self.lc.sasl_interactive_bind_s("",s)
+            self.me=self.lc.whoami_s()
+            if self.me=="":
+                self.me="(anonymous)"
+            debug( "bind to ldap server at '%s' as '%s'"%(self.lc.get_option(ldap.OPT_URI), self.me) )
+        if bindmethod=="simple":
+            self.lc.simple_bind_s(binduser,cred)
+        return
+
 
     def checkexist(self,dn):
         try:
@@ -59,7 +69,11 @@ class ldapmanage(object):
             if len(cmd)==0:
                 continue
             if cmd[0] in self.cmds:
-                self.__getattribute__(cmd[0])(cmd)
+                try:
+                    self.__getattribute__(cmd[0])(cmd)
+                except Exception,e:
+                    debug(type(e).__name__,":")
+                    debug( e.args)
             else:
                 error("no such command!")
     def cd(self,cmd):
@@ -97,7 +111,12 @@ class ldapmanage(object):
         """usage: ls"""
         res=self.lc.search_s(self.cwd,ldap.SCOPE_ONELEVEL,"(objectClass=*)",["dn"])
         print res
-    def showdsa(self,cmd):
+    def getdsa(self,cmd):
+        """usage: getdsa [-r]
+        -r means reload dsa data from server, and will cause the cwd change
+        """
+        if len(cmd)>1 and cmd[1]=="-r":
+            self._refresh_dsa()
         print self.dsa[0]
     def init(self,cmd):
         """usage: init [OPTS]...[LDAPURL]
@@ -133,14 +152,20 @@ class ldapmanage(object):
                 bindpw=a
             if o=="-h":
                 print self.init.__doc__
-            return
+                return
         if len(args)==0:
             uri="ldapi:///"
         else:
             uri=args[0]
-        if bindmech=="":
-            bindmech="external"
-        self._init(uri,bindmech,binduser,bindpw,authzid)
+#         if bindmech=="":
+#             bindmech="external"
+        if cmd[0]=="init":
+            self._init(uri,bindmech,binduser,bindpw,authzid)
+        else:
+            if bindmech=="":
+                bindmech="external"
+            self._bind(bindmech,binduser,bindpw,authzid)
+
     def exit(self,cmd):
         """usage: exit"""
         import sys
@@ -158,12 +183,12 @@ class ldapmanage(object):
             if cmd[1] in self.cmds:
                 print self.__getattribute__(cmd[1]).__doc__
             else:
-                print "No such command!"
+                print "help: No such command!"
         else:
             for i in self.cmds:
                 print i
 
         
 
-lm=ldapmanage("ldapi:///")
+lm=ldapmanage()
 lm.standby()
