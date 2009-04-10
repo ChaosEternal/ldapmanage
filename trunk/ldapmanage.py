@@ -165,6 +165,16 @@ class ldapmanage(object):
             if bindmech=="":
                 bindmech="external"
             self._bind(bindmech,binduser,bindpw,authzid)
+    def bind(self,cmd):
+        """usage: bind [OPTS]...
+            OPTS:
+                -x: simple bind
+                -y 'mech': sasl bind using mechanism 'mech'
+                -z 'authzid': proxied authentication to 'authzid'
+                -d 'binduser': bind using 'binduser', when simple bind, it is the dn
+                -w 'password': bind using 'password'
+        """
+        self.init(cmd)
 
     def exit(self,cmd):
         """usage: exit"""
