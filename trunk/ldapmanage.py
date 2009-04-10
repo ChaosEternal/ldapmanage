@@ -1,6 +1,11 @@
 #!/usr/bin/python
-import ldap,shlex,cmd,getopt,traceback
+import ldap,shlex,cmd,getopt,traceback,sys
 from ldap import sasl
+class LdapManagerError(Exception):
+    pass
+class RdnError(LdapManagerError):
+    pass
+
 class debug_message:
     def __init__(self,level=1):
         self.level=level
@@ -12,6 +17,40 @@ class debug_message:
                 print m ,
 debug=debug_message(1)
 error=debug_message(1)
+myprint=debug_message(1)
+
+
+def computerdn(dn1,dn2):
+    """return the rdn part of dn1 based on dn2"""
+    a=ldap.explode_dn(dn1)
+    b=ldap.explode_dn(dn2)
+    if b=="":
+        return dn1
+    l_a=len(a)
+    l_b=len(b)
+    if l_a<l_b:
+        raise RdnError, "Lenth of base dn is longer than the compared one."
+    if a[l_a-l_b:]==b:
+        if l_a!=l_b:
+            return reduce(lambda x,y:x+", "+y, a[:l_a-l_b])
+        else:
+            return ""
+    else:
+        raise RdnError, "The dn is mismatch."
+
+trans_scope={
+    "base":ldap.SCOPE_BASE,
+    "B":ldap.SCOPE_BASE,
+
+    "one":ldap.SCOPE_ONELEVEL,
+    "onelevel":ldap.SCOPE_ONELEVEL,
+    "1":ldap.SCOPE_ONELEVEL,
+
+    "subtree":ldap.SCOPE_SUBTREE,
+    "sub":ldap.SCOPE_SUBTREE,
+    "S":ldap.SCOPE_SUBTREE
+
+    }
 
 class ldapmanage(object):
     def __init__(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
@@ -71,7 +110,10 @@ class ldapmanage(object):
             if cmd[0] in self.cmds:
                 try:
                     self.__getattribute__(cmd[0])(cmd)
+                except getopt.GetoptError,e:
+                    debug(cmd[0]+":"+"%s"%e)
                 except Exception,e:
+                    raise
                     debug(type(e).__name__,":")
                     debug( e.args)
             else:
@@ -108,9 +150,49 @@ class ldapmanage(object):
         res=self.lc.search_s(entrydn,ldap.SCOPE_BASE,"(objectClass=*)")
         print res
     def ls(self,cmd):
-        """usage: ls"""
-        res=self.lc.search_s(self.cwd,ldap.SCOPE_ONELEVEL,"(objectClass=*)",["dn"])
-        print res
+        """usage: ls [-pB1S] [-s base|one|sub] [-a attrlist] [filter]
+        -p causes the output is raw python data
+        -B, -1, -S: search scope is -s base,-s one,-s sub
+        -s base|one|sub : specify the search scope to base, onelevel and subtree
+        """
+        optlist,args=getopt.getopt(cmd[1:],"pB1Ss:a:")
+        rawoutput=False
+        scope=trans_scope["one"]
+        attrs=[]
+        for o, a in optlist:
+            if o=="-p":
+                rawoutput=True
+            if o=="-s":
+                if not a in trans_scope.keys():
+                    error("ls: invalid scope, should be one of 'base','one' and 'sub'")
+                    return
+                else:
+                    scope=trans_scope[a]
+                
+            if o=="-B":
+                scope=trans_scope["B"]
+            if o=="-1":
+                scope=trans_scope["1"]
+            if o=="-S":
+                scope=trans_scope["S"]
+            if o=="-a":
+                attrs=a.split(",")
+        if len(args)>0:
+            filter=args[0]
+        else:
+            filter="(objectClass=*)"
+
+        res=self.lc.search_s(self.cwd,scope,filter,attrs)
+        if rawoutput:
+            print res
+        else:
+            if res==[]:
+                return
+
+            if sys.stdout.isatty():
+                print reduce(lambda x,y:x+"\t"+y,map(lambda x:computerdn(x[0],self.cwd),res))
+            else:
+                map(lambda x:myprint( computerdn(x[0],self.cwd)),res)
     def getdsa(self,cmd):
         """usage: getdsa [-r]
         -r means reload dsa data from server, and will cause the cwd change
