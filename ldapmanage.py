@@ -21,11 +21,22 @@ myprint=debug_message(1)
 
 class lm_formater:
     """default formater is python __repr__"""
-    def __init__(self, fm=""):
+    def __init__(self, fm="",fmdef="",desc=""):
         self.fm=fm
+        self.fmdef=fmdef
+        self.desc=desc
     def __call__(self, data, writer=myprint):
         if self.fm=="":
-            myprint(data.__repr__())
+            writer(data.__repr__())
+        if self.fm=="ldif":
+            for i in data:
+                if i[1]!={}:
+                    writer(ldif.CreateLDIF(i[0],i[1]),0)
+                else:
+                    writer(ldif.CreateLDIF(i[0],{"":[]}),0)
+        if self.fm=="json":
+            import json
+            writer(json.write(data))
 
 def computerdn(dn1,dn2):
     """return the rdn part of dn1 based on dn2"""
@@ -62,8 +73,13 @@ trans_scope={
 class ldapmanage(object):
     def __init__(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
         self.cwd="(no server)"
-        self.cmds=["cd","ls","entry","add","modify","delete","base64","getdsa","init","exit","w","whoami","help","bind"]
-        self.of={"python":lm_formater()}
+        self.cmds=["cd","ls","entry","add","modify","delete",
+                   "base64","getdsa","init","exit","w","whoami","help","bind",
+                   "formats"
+                   ]
+        self.of={
+            "python":lm_formater("","","The data is using python method 'repr'"),
+            "ldif":lm_formater("ldif","","the data is using ldif format")}
         if uri!="":
             self._init(uri,bindmethod,binduser,cred,authzid)
 
@@ -161,7 +177,7 @@ class ldapmanage(object):
         else:
             entrydn=self.cwd
         res=self.lc.search_s(entrydn,ldap.SCOPE_BASE,"(objectClass=*)")
-        print res
+        self.of["ldif"](res)
     def ls(self,cmd):
         """usage: ls [-pB1Sf] [-s base|one|sub] [-a attrlist] [filter]
         -p causes the output is raw python data
@@ -169,6 +185,7 @@ class ldapmanage(object):
         -s base|one|sub : specify the search scope to base, onelevel and subtree
         -a: the attributes need to be displayed, only valid when the output is python-mode
         -f: format the output as ldif
+        -o: format the output as json
         """
         optlist,args=getopt.getopt(cmd[1:],"fpB1Ss:a:")
         rawoutput=False
@@ -195,6 +212,9 @@ class ldapmanage(object):
                 attrs=a.split(",")
             if o=="-f":
                 format="ldif"
+            if o=="-o":
+                import json
+                format="json"
         if len(args)>0:
             filter=args[0]
         else:
@@ -202,13 +222,9 @@ class ldapmanage(object):
 
         res=self.lc.search_s(self.cwd,scope,filter,attrs)
         if rawoutput:
-            print res
-        elif format:
-            for e in res:
-                if e[1]!={}:
-                    print ldif.CreateLDIF(e[0], e[1]),
-                else:
-                    print ldif.CreateLDIF(e[0],{"":[]}),
+            lm_formater("json")(res)
+        elif format in self.of.keys():
+            self.of["ldif"](res)
         else:
             if res==[]:
                 return
@@ -223,7 +239,7 @@ class ldapmanage(object):
         """
         if len(cmd)>1 and cmd[1]=="-r":
             self._refresh_dsa()
-        print self.dsa[0]
+        self.of["ldif"](self.dsa)
     def init(self,cmd):
         """usage: init [OPTS]...[LDAPURL]
             OPTS:
@@ -293,6 +309,12 @@ class ldapmanage(object):
         """usage: whoami"""
         r=self.lc.whoami_s()
         print r
+    def formats(self,cmd):
+        """usage: ofinfo
+        list all data formats used for ldap data
+        """
+        for i in self.of.keys():
+            myprint("%s : %s"%(i,self.of[i].desc))
     def help(self,cmd):
         """usage: help [command]"""
         if len(cmd)>1:
