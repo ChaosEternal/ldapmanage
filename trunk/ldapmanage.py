@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import ldap,shlex,cmd,getopt,traceback,sys
+import ldap,shlex,cmd,getopt,traceback,sys,ldif
 from ldap import sasl
 class LdapManagerError(Exception):
     pass
@@ -150,15 +150,18 @@ class ldapmanage(object):
         res=self.lc.search_s(entrydn,ldap.SCOPE_BASE,"(objectClass=*)")
         print res
     def ls(self,cmd):
-        """usage: ls [-pB1S] [-s base|one|sub] [-a attrlist] [filter]
+        """usage: ls [-pB1Sf] [-s base|one|sub] [-a attrlist] [filter]
         -p causes the output is raw python data
         -B, -1, -S: search scope is -s base,-s one,-s sub
         -s base|one|sub : specify the search scope to base, onelevel and subtree
+        -a: the attributes need to be displayed, only valid when the output is python-mode
+        -f: format the output as ldif
         """
-        optlist,args=getopt.getopt(cmd[1:],"pB1Ss:a:")
+        optlist,args=getopt.getopt(cmd[1:],"fpB1Ss:a:")
         rawoutput=False
+        format=False
         scope=trans_scope["one"]
-        attrs=[]
+        attrs=["dn"]
         for o, a in optlist:
             if o=="-p":
                 rawoutput=True
@@ -177,6 +180,8 @@ class ldapmanage(object):
                 scope=trans_scope["S"]
             if o=="-a":
                 attrs=a.split(",")
+            if o=="-f":
+                format=True
         if len(args)>0:
             filter=args[0]
         else:
@@ -185,6 +190,11 @@ class ldapmanage(object):
         res=self.lc.search_s(self.cwd,scope,filter,attrs)
         if rawoutput:
             print res
+        elif format:
+            if res[0][1]!={}:
+                print ldif.CreateLDIF(res[0][0], res[0][1])
+            else:
+                print ldif.CreateLDIF(res[0][0],{"":[]})
         else:
             if res==[]:
                 return
