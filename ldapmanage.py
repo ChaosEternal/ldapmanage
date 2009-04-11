@@ -19,6 +19,13 @@ debug=debug_message(1)
 error=debug_message(1)
 myprint=debug_message(1)
 
+class lm_formater:
+    """default formater is python __repr__"""
+    def __init__(self, fm=""):
+        self.fm=fm
+    def __call__(self, data, writer=myprint):
+        if self.fm=="":
+            myprint(data.__repr__())
 
 def computerdn(dn1,dn2):
     """return the rdn part of dn1 based on dn2"""
@@ -56,6 +63,7 @@ class ldapmanage(object):
     def __init__(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
         self.cwd="(no server)"
         self.cmds=["cd","ls","entry","add","modify","delete","base64","getdsa","init","exit","w","whoami","help","bind"]
+        self.of={"python":lm_formater()}
         if uri!="":
             self._init(uri,bindmethod,binduser,cred,authzid)
 
@@ -88,7 +96,7 @@ class ldapmanage(object):
         return
 
 
-    def checkexist(self,dn):
+    def _checkexist(self,dn):
         try:
             res=self.lc.search_s(dn,ldap.SCOPE_BASE,"(objectClass=*)",["dn"])
         except:
@@ -111,7 +119,12 @@ class ldapmanage(object):
                 try:
                     self.__getattribute__(cmd[0])(cmd)
                 except getopt.GetoptError,e:
-                    debug(cmd[0]+":"+"%s"%e)
+                    debug(cmd[0]+": "+"%s"%e)
+                except ldap.error,e:
+                    debug(cmd[0]+": "+"%s: "%(type(e).__name__)+"%s"%e)
+                except AttributeError,e:
+                    debug(cmd[0]+": "+"%s: "%(type(e).__name__)+"%s"%e)
+                    debug("Maybe you haven't initialize the ldap connection.")
                 except Exception,e:
                     raise
                     debug(type(e).__name__,":")
@@ -132,7 +145,7 @@ class ldapmanage(object):
                     newcwd=path
                 else:
                     newcwd=path+","+self.cwd
-            if self.checkexist(newcwd):
+            if self._checkexist(newcwd):
                 self.cwd=newcwd
             else:
                 error("no such entry!")
@@ -159,7 +172,7 @@ class ldapmanage(object):
         """
         optlist,args=getopt.getopt(cmd[1:],"fpB1Ss:a:")
         rawoutput=False
-        format=False
+        format=""
         scope=trans_scope["one"]
         attrs=["dn"]
         for o, a in optlist:
@@ -181,7 +194,7 @@ class ldapmanage(object):
             if o=="-a":
                 attrs=a.split(",")
             if o=="-f":
-                format=True
+                format="ldif"
         if len(args)>0:
             filter=args[0]
         else:
@@ -191,10 +204,11 @@ class ldapmanage(object):
         if rawoutput:
             print res
         elif format:
-            if res[0][1]!={}:
-                print ldif.CreateLDIF(res[0][0], res[0][1])
-            else:
-                print ldif.CreateLDIF(res[0][0],{"":[]})
+            for e in res:
+                if e[1]!={}:
+                    print ldif.CreateLDIF(e[0], e[1]),
+                else:
+                    print ldif.CreateLDIF(e[0],{"":[]}),
         else:
             if res==[]:
                 return
