@@ -19,24 +19,9 @@ debug=debug_message(1)
 error=debug_message(1)
 myprint=debug_message(1)
 
-class lm_formater:
-    """default formater is python __repr__"""
-    def __init__(self, fm="",fmdef="",desc=""):
-        self.fm=fm
-        self.fmdef=fmdef
-        self.desc=desc
-    def __call__(self, data, writer=myprint):
-        if self.fm=="":
-            writer(data.__repr__())
-        if self.fm=="ldif":
-            for i in data:
-                if i[1]!={}:
-                    writer(ldif.CreateLDIF(i[0],i[1]),0)
-                else:
-                    writer(ldif.CreateLDIF(i[0],{"":[]}),0)
-        if self.fm=="json":
-            import json
-            writer(json.write(data))
+import lm_driver
+lm_formatter=lm_driver.lm_driver
+lm_formatter.myprint=myprint
 
 def computerdn(dn1,dn2):
     """return the rdn part of dn1 based on dn2"""
@@ -78,8 +63,8 @@ class ldapmanage(object):
                    "formats"
                    ]
         self.of={
-            "python":lm_formater("","","The data is using python method 'repr'"),
-            "ldif":lm_formater("ldif","","the data is using ldif format")}
+            "python":lm_formatter("","","The data is using python method 'repr'"),
+            "ldif":lm_formatter("ldif","","the data is using ldif format")}
         if uri!="":
             self._init(uri,bindmethod,binduser,cred,authzid)
 
@@ -222,7 +207,7 @@ class ldapmanage(object):
 
         res=self.lc.search_s(self.cwd,scope,filter,attrs)
         if rawoutput:
-            lm_formater("json")(res)
+            lm_formatter("json")(res)
         elif format in self.of.keys():
             self.of["ldif"](res)
         else:
