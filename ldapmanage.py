@@ -19,10 +19,6 @@ debug=debug_message(1)
 error=debug_message(1)
 myprint=debug_message(1)
 
-import lm_driver
-lm_formatter=lm_driver.lm_driver
-lm_formatter.myprint=myprint
-
 def computerdn(dn1,dn2):
     """return the rdn part of dn1 based on dn2"""
     a=ldap.explode_dn(dn1)
@@ -54,6 +50,8 @@ trans_scope={
     "S":ldap.SCOPE_SUBTREE
 
     }
+
+import fmt_helper
 
 class ldapmanage(object):
     def __init__(self, uri="", bindmethod="external", binduser="", cred="", authzid=""):
