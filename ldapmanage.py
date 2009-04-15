@@ -61,8 +61,10 @@ class ldapmanage(object):
                    "formats"
                    ]
         self.of={
-            "python":lm_formatter("","","The data is using python method 'repr'"),
-            "ldif":lm_formatter("ldif","","the data is using ldif format")}
+            "json":fmt_helper.fmt_helper(),
+            "ldif":fmt_helper.fmt_ldif(),
+            "csv":fmt_helper.fmt_csv("uid::uidNumber:gidNumber:cn#:homeDirectory:loginShell",oc=["inetOrgPerson","posixAccount"])
+            }
         if uri!="":
             self._init(uri,bindmethod,binduser,cred,authzid)
 
@@ -160,7 +162,7 @@ class ldapmanage(object):
         else:
             entrydn=self.cwd
         res=self.lc.search_s(entrydn,ldap.SCOPE_BASE,"(objectClass=*)")
-        self.of["ldif"](res)
+        self.of["ldif"].export(res)
     def ls(self,cmd):
         """usage: ls [-pB1Sf] [-s base|one|sub] [-a attrlist] [filter]
         -p causes the output is raw python data
@@ -170,7 +172,7 @@ class ldapmanage(object):
         -f: format the output as ldif
         -o: format the output as json
         """
-        optlist,args=getopt.getopt(cmd[1:],"fpB1Ss:a:")
+        optlist,args=getopt.getopt(cmd[1:],"fpB1Ss:a:o:")
         rawoutput=False
         format=""
         scope=trans_scope["one"]
@@ -196,8 +198,7 @@ class ldapmanage(object):
             if o=="-f":
                 format="ldif"
             if o=="-o":
-                import json
-                format="json"
+                format=a
         if len(args)>0:
             filter=args[0]
         else:
@@ -205,9 +206,9 @@ class ldapmanage(object):
 
         res=self.lc.search_s(self.cwd,scope,filter,attrs)
         if rawoutput:
-            lm_formatter("json")(res)
+            myprint(self.of["json"].export_multi(res))
         elif format in self.of.keys():
-            self.of["ldif"](res)
+            myprint(self.of[format].export_multi(res))
         else:
             if res==[]:
                 return
@@ -222,7 +223,7 @@ class ldapmanage(object):
         """
         if len(cmd)>1 and cmd[1]=="-r":
             self._refresh_dsa()
-        self.of["ldif"](self.dsa)
+        self.of["ldif"].export(self.dsa)
     def init(self,cmd):
         """usage: init [OPTS]...[LDAPURL]
             OPTS:
