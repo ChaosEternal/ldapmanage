@@ -1,13 +1,13 @@
-import ldif,StringIO,json
+import ldif,StringIO
 class FmtError(Exception):
     pass
 class fmt_helper:
     def __init__(self):
         pass
     def load(self, x):
-        return json.read(x)
+        pass
     def export(self, x):
-        return json.write(x)
+        return repr(x)
     def export_multi(self,x,rf="\n"):
         return reduce(lambda x,y:"%s%s%s"%(x,rf,y), map(lambda x:self.export(x),x))
 class fmt_ldif(fmt_helper):
