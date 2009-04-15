@@ -212,8 +212,21 @@ if __name__ == '__main__':
     mydesc=[
         [], #mapping
         [], #filter
-        {"output":[["and",[["","match",["valueof","a"],["string","b"]]],[["output",",",["valueof","a"]]],[]]] }, #sub channel
-        {}
+        {
+            "output":
+                [
+                ["and",
+                 [
+                        ["","match",["valueof","a"],["string","b"]]
+                        ], #conditions 
+                 [
+                        ["output",",",["valueof","a"]] 
+                        ], #actions if true
+                 [] # actions if false
+                 ]
+                ]
+         }, #subscribe channel
+        {}#publish channel
         ]
     s=json.write(mydesc)
     print s
