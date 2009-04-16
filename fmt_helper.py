@@ -23,10 +23,10 @@ class fmt_ldif(fmt_helper):
 class fmt_csv(fmt_helper):
     def __init__(self, x, fdeft="", fs=":", vs=",", basedn="", oc=["inetOrgPerson"],desc="csv"):
         fmt_helper.__init__(self,desc)
-        self.desc+=" With fields definition:\""+ x + "\","
+        self.desc+="\n   Fields definition:\""+ x + "\","
         if fdeft!="":
-            self.desc+="\n Default value definition:\"" + fdeft +"\","
-        self.desc+="\n BaseDn is \"" + basedn +"\"."
+            self.desc+="\n Default input value definition:\"" + fdeft +"\","
+        self.desc+="\n   BaseDn is \"" + basedn +"\"."
             
         _fields=map(lambda x:x.strip(),x.split(fs))
         _dnf=filter(lambda x: x.find("#") >= 0 ,_fields)
@@ -67,12 +67,16 @@ class fmt_csv(fmt_helper):
         _rawdict = self._load(x)
         if self.indeftdict!=None:
             for i in self.indeftdict.keys():
-                if _rawdict.has_key(i):
+                if not _rawdict.has_key(i):
+                    _rawdict[i]=[]
                     for j in self.indeftdict[i]:
-                        if not j in _rawdict[i]:
+                        if j[0]!="$":
                             _rawdict[i].append(j)
-                else:
-                    _rawdict[i]=self.indeftdict[i]
+                        else:
+                            if _rawdict.has_key(j[1:]):
+                                for k in _rawdict[j[1:]]:
+                                    if not k in _rawdict[i]:
+                                        _rawdict[i].append(k)
         for i in self.dnf:
             if _rawdict.has_key(i):
                 _dn=i+"="+_rawdict[i][0]+self.basedn
@@ -109,8 +113,8 @@ class fmt_csv(fmt_helper):
         pass
 
 if __name__ == "__main__":
-    e=fmt_csv("cn:%x:uid#:objectClass",fdeft="eternal:::")
-    f=e.load(":a sd:c d ,e :top, ,posixAccount,inetOrgPerson")
+    e=fmt_csv("cn:%x:uid#:objectClass",fdeft="eternal::$cn:")
+    f=e.load("chaos,eterna;:a sd::top, ,posixAccount,inetOrgPerson")
     print f
     
     print e.export(f)
