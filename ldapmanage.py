@@ -63,7 +63,7 @@ class ldapmanage(object):
         self.of={
             "json":fmt_helper.fmt_helper(),
             "ldif":fmt_helper.fmt_ldif(),
-            "csv":fmt_helper.fmt_csv("uid::uidNumber:gidNumber:cn#:homeDirectory:loginShell",oc=["inetOrgPerson","posixAccount"])
+            "csv":fmt_helper.fmt_csv("uid:%x:uidNumber:gidNumber:cn#:homeDirectory:loginShell",oc=["inetOrgPerson","posixAccount"])
             }
         if uri!="":
             self._init(uri,bindmethod,binduser,cred,authzid)
