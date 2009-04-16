@@ -58,10 +58,10 @@ class ldapmanage(object):
         self.cwd="(no server)"
         self.cmds=["cd","ls","entry","add","modify","delete",
                    "base64","getdsa","init","exit","w","whoami","help","bind",
-                   "formats"
+                   "fmts"
                    ]
         self.of={
-            "json":fmt_helper.fmt_helper(),
+            "python":fmt_helper.fmt_helper(),
             "ldif":fmt_helper.fmt_ldif(),
             "csv":fmt_helper.fmt_csv("uid:%x:uidNumber:gidNumber:cn#:homeDirectory:loginShell",oc=["inetOrgPerson","posixAccount"])
             }
@@ -126,6 +126,8 @@ class ldapmanage(object):
                 except AttributeError,e:
                     debug(cmd[0]+": "+"%s: "%(type(e).__name__)+"%s"%e)
                     debug("Maybe you haven't initialize the ldap connection.")
+                except LdapManagerError,e:
+                    debug(cmd[0]+": "+"%s: "%(type(e).__name__)+"%s"%e)
                 except Exception,e:
                     raise
                     debug(type(e).__name__,":")
@@ -293,12 +295,65 @@ class ldapmanage(object):
         """usage: whoami"""
         r=self.lc.whoami_s()
         print r
-    def formats(self,cmd):
-        """usage: ofinfo
-        list all data formats used for ldap data
+    def fmts(self,cmd):
+        """usage: fmts [-l] [name]
+        fmts [-i csv] [--fs=:] [--vs=,] [--fields=] [--field-defaults=] [--oc=oc1,oc2] [--basedn=] [name] 
+        fmts [-d name]
+        fmts [-h]
+        -l: details of format definition
+        -i: install new format definition, currently only csv template available
+        -d: delete format definition
+        -h: help
+        Manage data formats used for ldap data.
+        -l: show details
+        
         """
+        optlist,args=getopt.getopt(cmd[1:],"ldhi:",["vs=","fs=","fields=","field-defaults=","oc="])
+        _optdict=dict([i for i in optlist])
+      
+        
+        if "-h" in _optdict.keys():
+            self.help(["help","fmts"])
+            return
+        if "-l" in _optdict.keys():
+            if len(args)>0:
+                for i in args:
+                    if i in self.of.keys():
+                        myprint("%s : %s"%(i,self.of[i].desc))
+                    else:
+                        myprint("N/A: %s"%i)
+            else:
+                for i in self.of.keys():
+                    myprint("%s : %s"%(i,self.of[i].desc))
+            return
+        if "-i" in _optdict.keys():
+            if _optdict["-i"] != "csv":
+                raise LdapManagerError,"Can't add new formats other than csv."
+            if len(args)<1:
+                raise LdapManagerError,"fmts -i: we need a name."
+            if args[0] in self.of.keys():
+                raise LdapManagerError,"fmts -i: name in use."
+            _fs=_optdict.get("--fs",":")
+            _vs=_optdict.get("--vs",",")
+            _fields=_optdict.get("--fields","cn%x:objectClass")
+            _field_defaults=_optdict.get("--field-defaults","")
+            _oc=_optdict.get("--oc","").split(",")
+            _basedn=_optdict.get("--basedn","")
+            self.of[args[0]]=fmt_helper.fmt_csv(_fields,_field_defaults,_fs,_vs,_basedn,_oc,_optdict.get("-i","csv"))
+            return
+        if "-d" in _optdict.keys():
+            if len(args)<1:
+                raise LdapManagerError,"fmts -d: we need a name to delete."
+            if args[0] in ["python","ldif","csv"]:
+                raise LdapManagerError,"fmts -d: format is readonly."
+            if not args[0] in self.of.keys():
+                raise LdapManagerError,"fmts -d: no such format"
+            self.of.pop(args[0])
+            return
         for i in self.of.keys():
-            myprint("%s : %s"%(i,self.of[i].desc))
+            print i
+            
+            
     def help(self,cmd):
         """usage: help [command]"""
         if len(cmd)>1:
